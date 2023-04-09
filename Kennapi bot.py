@@ -1,37 +1,70 @@
 import os
 import discord
-from discord.ext import commands
 import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+import spotipy.util as util
+from dotenv import load_dotenv
 
-client_id = os.environ.get('CLIENT_ID')
-client_secret = os.environ.get('CLIENT_SECRET')
-redirect_uri = os.environ.get('REDIRECT_URI')
-scope = 'user-read-playback-state,user-modify-playback-state'
+load_dotenv()
 
-bot = commands.Bot(command_prefix='!')
+# Get environment variables
+TOKEN = os.getenv('DISCORD_TOKEN')
+SPOTIPY_CLIENT_ID = os.getenv('SPOTIPY_CLIENT_ID')
+SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIPY_CLIENT_SECRET')
+SPOTIPY_REDIRECT_URI = os.getenv('SPOTIPY_REDIRECT_URI')
+SPOTIPY_USERNAME = os.getenv('SPOTIPY_USERNAME')
 
-@bot.command()
-async def play(ctx, *, song):
-    if not ctx.author.voice:
-        await ctx.send("You are not connected to a voice channel.")
+# Set up the Discord client and Spotify client
+client = discord.Client()
+scope = 'user-read-playback-state,user-modify-playback-state,user-read-private'
+token = util.prompt_for_user_token(SPOTIPY_USERNAME, scope, SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, SPOTIPY_REDIRECT_URI)
+sp = spotipy.Spotify(auth=token)
+
+
+@client.event
+async def on_ready():
+    print(f'{client.user.name} has connected to Discord!')
+
+
+@client.event
+async def on_message(message):
+    if message.author == client.user:
         return
-    else:
-        channel = ctx.author.voice.channel
-    spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, scope=scope))
-    results = spotify.search(q=song, type='track', limit=1)
-    uri = results['tracks']['items'][0]['uri']
-    player = await channel.connect()
-    player.play(discord.FFmpegPCMAudio(uri))
-    await ctx.send(f"Now playing: {results['tracks']['items'][0]['name']}")
 
-@bot.command()
-async def stop(ctx):
-    if not ctx.voice_client:
-        await ctx.send("I am not connected to a voice channel.")
-        return
-    else:
-        await ctx.voice_client.disconnect()
-        await ctx.send("Disconnected from voice channel.")
+    if message.content.startswith('!play'):
+        try:
+            query = message.content.split(' ', 1)[1]
+            results = sp.search(q=query, type='track', limit=1)
+            if results['tracks']['items']:
+                track_uri = results['tracks']['items'][0]['uri']
+                sp.start_playback(uris=[track_uri])
+                await message.channel.send(f'Now playing: {results["tracks"]["items"][0]["name"]}')
+        except Exception as e:
+            print(e)
+            await message.channel.send('Error: Failed to play song')
 
-bot.run('your_bot_token')
+    elif message.content == '!stop':
+        try:
+            sp.pause_playback()
+            await message.channel.send('Playback stopped')
+        except Exception as e:
+            print(e)
+            await message.channel.send('Error: Failed to stop playback')
+
+    elif message.content == '!skip':
+        try:
+            sp.next_track()
+            await message.channel.send('Skipped to the next song')
+        except Exception as e:
+            print(e)
+            await message.channel.send('Error: Failed to skip to the next song')
+
+    elif message.content.startswith('!playlist'):
+        try:
+            playlist_uri = message.content.split(' ', 1)[1]
+            sp.start_playback(context_uri=playlist_uri)
+            await message.channel.send('Now playing playlist')
+        except Exception as e:
+            print(e)
+            await message.channel.send('Error: Failed to play playlist')
+
+client.run(TOKEN)
