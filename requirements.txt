@@ -1,5 +1,12 @@
+<<<<<<< HEAD
 discord.py==1.7.3
 spotipy==2.18.0
 ffmpeg-python==0.2.0
 PyNaCl==1.4.0
 python-dotenv==0.19.1
+=======
+discord.py==1.7.3
+spotipy==2.18.0
+ffmpeg-python==0.2.0
+python-dotenv
+>>>>>>> 40477a8f3f188bad8a1fcb9c1051e031056962f0
